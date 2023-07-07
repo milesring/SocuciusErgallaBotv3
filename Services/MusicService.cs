@@ -1,18 +1,8 @@
 ﻿using DSharpPlus.Entities;
 using DSharpPlus.Lavalink;
-using DSharpPlus.Lavalink.Entities;
 using DSharpPlus.SlashCommands;
 using Microsoft.Extensions.Logging;
 using SocuciusErgallaBotv3.Model;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Policy;
-using System.Text;
-using System.Threading.Tasks;
-using System.Transactions;
-using System.Xml.Linq;
-using static System.Net.Mime.MediaTypeNames;
 
 namespace SocuciusErgallaBotv3.Services
 {

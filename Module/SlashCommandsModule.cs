@@ -1,21 +1,10 @@
 ﻿using DSharpPlus;
-using DSharpPlus.CommandsNext;
 using DSharpPlus.Entities;
-using DSharpPlus.Lavalink;
 using DSharpPlus.SlashCommands;
 using Microsoft.Extensions.Logging;
-using Microsoft.VisualBasic;
-using Newtonsoft.Json.Linq;
-using Serilog;
 using SocuciusErgallaBotv3.Services;
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Security.Policy;
-using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 namespace SocuciusErgallaBotv3.Module
 {

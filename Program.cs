@@ -1,6 +1,4 @@
-﻿using DSharpPlus;
-using System.Net;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using SocuciusErgallaBotv3.Services;
 using Serilog;
 using Microsoft.Extensions.Logging;

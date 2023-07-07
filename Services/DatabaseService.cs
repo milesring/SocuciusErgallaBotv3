@@ -1,12 +1,6 @@
-﻿using DSharpPlus.CommandsNext;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using SocuciusErgallaBotv3.Model;
-using System;
-using System.Collections.Generic;
 using System.Data.SQLite;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SocuciusErgallaBotv3.Services
 {
