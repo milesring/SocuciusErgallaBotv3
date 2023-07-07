@@ -194,18 +194,6 @@ namespace SocuciusErgallaBotv3.Services
                         }
                     }
                 }
-                //command.CommandText = $"SELECT * FROM {_userTableName} WHERE {nameof(User.DiscordId).ToLower()} = $discordid";
-                //command.Parameters.AddWithValue("$discordid", user.DiscordId);
-                //using (var reader = await command.ExecuteReaderAsync())
-                //{
-                //    if (reader.HasRows)
-                //    {
-                //        await reader.ReadAsync();
-                //        int id = reader.GetInt32(reader.GetOrdinal(nameof(User.Id).ToLower()));
-
-                //    }
-                //}
-
                 await _connection.CloseAsync();
             }
             return users.OrderByDescending(x=>x.Item2).Take(5).ToList();
