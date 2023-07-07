@@ -22,7 +22,7 @@ SocuciusErgallaBotv3 is a Discord music bot based on the character Socucius Erga
 ## Dependencies
 
 - This bot utilizes the [DSharpPlus](https://github.com/DSharpPlus/DSharpPlus) library for Discord API integration.
-- Audio streaming is handled by [Lavalink](https://github.com/Frederikam/Lavalink). Refer to the Lavalink GitHub repository for help setting up Lavalink.
+- Audio streaming is handled by [Lavalink](https://github.com/lavalink-devs/Lavalink). Refer to the Lavalink GitHub repository for help setting up Lavalink.
 
 ## Setup
 
