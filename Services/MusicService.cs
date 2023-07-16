@@ -394,6 +394,7 @@ namespace SocuciusErgallaBotv3.Services
                 RepeatModeProperty = RepeatMode.None;
                 ShuffleModeProperty = ShuffleMode.None;
                 TrackQueue.Clear();
+                await _activityService.SetRandomActivity();
                 return new CommandResult() { Result = CommandExecutedResult.Success, Message = $"Successfully left channel." };
             }
             return new CommandResult() { Result = CommandExecutedResult.Failure, Message = $"Bot is not currently in a channel." };
