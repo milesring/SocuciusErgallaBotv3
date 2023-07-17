@@ -11,6 +11,7 @@ namespace SocuciusErgallaBotv3.Services
         private readonly DatabaseService _databaseService;
         private readonly ILogger<MusicService> _logger;
         private readonly ActivityService _activityService;
+        private readonly YoutubePlayListService _youtubePlayListService;
         private readonly Random _random;
         public const int DefaultVolume = 15;
         public bool InChannel { get; set; } = false;
@@ -21,11 +22,12 @@ namespace SocuciusErgallaBotv3.Services
         public RepeatMode RepeatModeProperty { get; set; } = RepeatMode.None;
         public ShuffleMode ShuffleModeProperty { get; set; } = ShuffleMode.None;
 
-        public MusicService(DatabaseService databaseService, ILogger<MusicService> logger, ActivityService activityService)
+        public MusicService(DatabaseService databaseService, ILogger<MusicService> logger, ActivityService activityService, YoutubePlayListService youtubePlayListService)
         {
             _databaseService = databaseService;
             _logger = logger;
             _activityService = activityService;
+            _youtubePlayListService = youtubePlayListService;
             _random = new();
         }
 
@@ -216,19 +218,6 @@ namespace SocuciusErgallaBotv3.Services
                     TrackQueue.Add(trackToQueue);
                 }
             }
-
-            //search database and insert track play
-            await _databaseService.InsertTrackPlayAsync(new TrackHistory()
-            {
-                Title = randomTrackFromHistory.Title,
-                Author = randomTrackFromHistory.Author,
-                URL = randomTrackFromHistory.URL,
-                User = new User()
-                {
-                    Username = context.User.Username,
-                    DiscordId = context.User.Id.ToString()
-                }
-            });
             string trackAction = NowPlayingTrack.Track == track ? "Track playing" : "Track queued";
             _logger.LogInformation($"{trackAction}: {track.Title} - {track.Author}");
             return new PlayResult()
@@ -255,13 +244,22 @@ namespace SocuciusErgallaBotv3.Services
             }
             LavalinkSearchType searchType = LavalinkSearchType.Youtube;
             Uri uriResult;
+            List<string> playList = new() { query };
             bool isQueryURLResult = Uri.TryCreate(query, UriKind.Absolute, out uriResult)
                 && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps);
             if (isQueryURLResult)
             {
+                //check for playlist
+                if (!string.IsNullOrEmpty(uriResult.Query) && uriResult.AbsolutePath.Equals("/playlist") && uriResult.Query.Contains("list="))
+                {
+                    playList = _youtubePlayListService.GetPlayListURLS(query);
+                }
                 searchType = LavalinkSearchType.Plain;
             }
-            var loadResult = await GetLavalinkNodeConnection(context).Rest.GetTracksAsync(query, searchType);
+            List<LavalinkTrack> tracks = new();
+            foreach(var search in playList)
+            {
+                var loadResult = await GetLavalinkNodeConnection(context).Rest.GetTracksAsync(search, searchType);
             switch (loadResult.LoadResultType)
             {
                 case LavalinkLoadResultType.LoadFailed:
@@ -314,31 +312,39 @@ namespace SocuciusErgallaBotv3.Services
                     TrackQueue.Add(trackToQueue);
                 }
             }
-
-            //search database and insert track play
-            await _databaseService.InsertTrackPlayAsync(new TrackHistory()
-            {
-                Title = track.Title,
-                Author = track.Author,
-                URL = track.Uri.ToString(),
-                User = new User()
-                {
-                    Username = context.User.Username,
-                    DiscordId = context.User.Id.ToString()
-                }
-            });
-            string trackAction = NowPlayingTrack.Track == track ? "Track playing" : "Track queued";
+            }
+            var firstTrack = tracks.First();
+            string trackAction = NowPlayingTrack.Track == tracks.First() ? "Track playing" : "Track queued";
             string timeString = startTime != TimeSpan.Zero || endTime != TimeSpan.Zero ? $" from {startTime:g}-{endTime:g}" : string.Empty;
-            _logger.LogInformation($"{trackAction}{timeString}: {track.Title} - {track.Author}");
+
+            if (NowPlayingTrack.Track == firstTrack && tracks.Count == 1) 
+            {
+                trackAction = "Track playing";
+            }
+            else if (tracks.Count == 1)
+                {
+                trackAction = "Track queued";
+                }
+            else if(NowPlayingTrack.Track == firstTrack && tracks.Count > 1)
+            {
+                trackAction = $"Track playing and {tracks.Count - 1} remaining tracks queued";
+            }
+            else if(tracks.Count > 1)
+            {
+                trackAction = $"Playlist of {tracks.Count} tracks queued";
+            }
+
+            _logger.LogInformation($"{trackAction}{timeString}: {firstTrack.Title} - {firstTrack.Author}");
+
             return new PlayResult()
             {
                 Result = CommandExecutedResult.Success,
                 Message = $"{trackAction}{timeString}.",
-                Title = track.Title,
-                Author = track.Author,
-                URL = track.Uri.ToString(),
-                Duration = track.Length,
-                ThumbnailURL = $"https://img.youtube.com/vi/{track.Identifier}/0.jpg"
+                Title = firstTrack.Title,
+                Author = firstTrack.Author,
+                URL = firstTrack.Uri.ToString(),
+                Duration = firstTrack.Length,
+                ThumbnailURL = $"https://img.youtube.com/vi/{firstTrack.Identifier}/0.jpg"
             };
         }
 
@@ -393,19 +399,6 @@ namespace SocuciusErgallaBotv3.Services
                 };
                 TrackQueue.Add(trackToQueue);
             }
-
-            //search database and insert track play
-            await _databaseService.InsertTrackPlayAsync(new TrackHistory()
-            {
-                Title = trackHistory.Title,
-                Author = trackHistory.Author,
-                URL = trackHistory.URL,
-                User = new User()
-                {
-                    Username = VoiceChannelConnection.Guild.CurrentMember.Username,
-                    DiscordId = VoiceChannelConnection.Guild.CurrentMember.Id.ToString()
-                }
-            });
             string trackAction = NowPlayingTrack.Track == track ? "Track playing" : "Track queued";
             _logger.LogInformation($"{trackAction}: {track.Title} - {track.Author}");
         }
