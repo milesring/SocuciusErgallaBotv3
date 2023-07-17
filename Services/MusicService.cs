@@ -79,7 +79,7 @@ namespace SocuciusErgallaBotv3.Services
         private async Task Node_PlaybackFinished(LavalinkGuildConnection sender, DSharpPlus.Lavalink.EventArgs.TrackFinishEventArgs args)
         {
             _logger.LogDebug($"Playback finished. Reason:{args.Reason}");
-            //throw new NotImplementedException();
+            //track ended and queue has tracks remaining or repeat is set
             if (args.Reason == DSharpPlus.Lavalink.EventArgs.TrackEndReason.Finished && (TrackQueue.Count > 0 || (RepeatModeProperty != RepeatMode.None && NowPlayingTrack != null)))
             {
                 switch (RepeatModeProperty)
@@ -110,14 +110,20 @@ namespace SocuciusErgallaBotv3.Services
                     await sender.PlayAsync(removedTrack.Track);
                     _logger.LogInformation($"Track playing from queue: {removedTrack.Track.Title} - {removedTrack.Track.Author}");
                 }
+                await SaveTrackInformationToDatabase(NowPlayingTrack);
                 IsPlaying = true;
             }
+            //queue is empty, but shuffle is set to endless mode
             else if (args.Reason == DSharpPlus.Lavalink.EventArgs.TrackEndReason.Finished && TrackQueue.Count == 0 && ShuffleModeProperty == ShuffleMode.Endless)
             {
                 NowPlayingTrack = null;
                 IsPlaying = false;
                 _logger.LogDebug($"Track queue empty, but shuffle mode is endless. Shuffling in new tracks.");
                 await QueueRandomTracks();
+                if (NowPlayingTrack != null)
+                {
+                    await SaveTrackInformationToDatabase(NowPlayingTrack);
+            }
             }
             else if (args.Reason == DSharpPlus.Lavalink.EventArgs.TrackEndReason.Replaced)
             {
@@ -131,6 +137,16 @@ namespace SocuciusErgallaBotv3.Services
             }
         }
 
+        private async Task SaveTrackInformationToDatabase(QueuedTrack track)
+        {
+            await _databaseService.InsertTrackPlayAsync(new TrackHistory()
+            {
+                Title = track.Track.Title,
+                Author = track.Track.Author,
+                URL = track.Track.Uri.ToString(),
+                User = track.User
+            });
+        }
         private async Task Node_PlaybackStarted(LavalinkGuildConnection sender, DSharpPlus.Lavalink.EventArgs.TrackStartEventArgs args)
         {
             await _activityService.UpdateActivity($"{NowPlayingTrack.Track.Title}-{NowPlayingTrack.Track.Author}", ActivityType.ListeningTo);
@@ -256,9 +272,15 @@ namespace SocuciusErgallaBotv3.Services
                     //all other results are successes
                     break;
             }
-
-            var track = loadResult.Tracks.First();
-
+                tracks.Add(loadResult.Tracks.First());
+            }
+            User user = new User()
+            {
+                Username = context.User.Username,
+                DiscordId = context.User.Id.ToString()
+            };
+            foreach (var track in tracks)
+            {
             if (NowPlayingTrack == null)
             {
                 TimeSpan start = startTime != TimeSpan.Zero ? startTime : TimeSpan.Zero;
@@ -270,7 +292,8 @@ namespace SocuciusErgallaBotv3.Services
                 {
                     Track = track,
                     StartTime = startTime,
-                    EndTime = endTime
+                        EndTime = endTime,
+                        User = user
                 };
             }
             else
@@ -279,7 +302,8 @@ namespace SocuciusErgallaBotv3.Services
                 {
                     Track = track,
                     StartTime = startTime,
-                    EndTime = endTime
+                        EndTime = endTime,
+                        User = user
                 };
                 if (next)
                 {
@@ -340,7 +364,11 @@ namespace SocuciusErgallaBotv3.Services
             }
 
             var track = loadResult.Tracks.First();
-
+            User user = new User()
+            {
+                Username = VoiceChannelConnection.Guild.CurrentMember.Username,
+                DiscordId = VoiceChannelConnection.Guild.CurrentMember.Id.ToString()
+            };
             if (NowPlayingTrack == null || NowPlayingTrack.Track == null)
             {
                 await VoiceChannelConnection.PlayAsync(track);
@@ -348,7 +376,8 @@ namespace SocuciusErgallaBotv3.Services
                 {
                     Track = track,
                     StartTime = TimeSpan.Zero,
-                    EndTime = TimeSpan.Zero
+                    EndTime = TimeSpan.Zero,
+                    User = user
                 };
                 IsPlaying = true;
             }
@@ -359,7 +388,8 @@ namespace SocuciusErgallaBotv3.Services
                 {
                     Track = track,
                     StartTime = TimeSpan.Zero,
-                    EndTime = TimeSpan.Zero
+                    EndTime = TimeSpan.Zero,
+                    User = user
                 };
                 TrackQueue.Add(trackToQueue);
             }
@@ -636,6 +666,8 @@ namespace SocuciusErgallaBotv3.Services
         public LavalinkTrack Track { get; set; }
         public TimeSpan StartTime { get; set; }
         public TimeSpan EndTime { get; set; }
+        public User User { get; set; }
+
     }
 
 }
