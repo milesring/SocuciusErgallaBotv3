@@ -93,7 +93,7 @@ namespace SocuciusErgallaBotv3.Module
 
 
             var result = await _musicService.PlayOrQueueSong(context, query, startTime, endTime, playNext);
-            await context.EditResponseAsync(
+            var responseEmbed = new DiscordEmbedBuilder()
                 new DiscordWebhookBuilder()
                     .AddEmbed(new DiscordEmbedBuilder()
                         .WithTitle($"{result.Title}")
@@ -102,10 +102,13 @@ namespace SocuciusErgallaBotv3.Module
                         .WithThumbnail($"{result.ThumbnailURL}")
                         .WithFooter($"{_quoteService.GetRandomQuote()}")
                         .WithUrl($"{result.URL}")
-                        .WithColor(DiscordColor.Green)
-                        .AddField($"Duration:", $"{result.Duration}")
-                        )
-                    );
+                        .WithColor(DiscordColor.Green);
+
+            if (result.Result != CommandExecutedResult.Failure)
+            {
+                responseEmbed.AddField($"Duration:", $"{result.Duration}");
+        }
+            await context.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(responseEmbed));
         }
 
         [SlashCommand("Pause", "Pause currently playing song.")]
