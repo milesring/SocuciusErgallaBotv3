@@ -69,7 +69,7 @@ namespace SocuciusErgallaBotv3.Module
             }
 
             //process out time stamp from url
-            Regex rx = new(@"t=(\d*)\w*$", RegexOptions.Compiled);
+            Regex rx = new(@"[^lis]t=(\d*)\w*$", RegexOptions.Compiled);
             var match = rx.Match(query);
             TimeSpan startTime = TimeSpan.Zero;
             TimeSpan endTime = endSeconds > 0 ? TimeSpan.FromSeconds((int)endSeconds) : TimeSpan.Zero;
@@ -90,12 +90,8 @@ namespace SocuciusErgallaBotv3.Module
                 }
             }
 
-
-
             var result = await _musicService.PlayOrQueueSong(context, query, startTime, endTime, playNext);
             var responseEmbed = new DiscordEmbedBuilder()
-                new DiscordWebhookBuilder()
-                    .AddEmbed(new DiscordEmbedBuilder()
                         .WithTitle($"{result.Title}")
                         .WithAuthor($"{result.Author}")
                         .WithDescription($"{result.Message}")
