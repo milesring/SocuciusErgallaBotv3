@@ -125,7 +125,7 @@ namespace SocuciusErgallaBotv3.Services
                 if (NowPlayingTrack != null)
                 {
                     await SaveTrackInformationToDatabase(NowPlayingTrack);
-            }
+                }
             }
             else if (args.Reason == DSharpPlus.Lavalink.EventArgs.TrackEndReason.Replaced)
             {
@@ -260,16 +260,16 @@ namespace SocuciusErgallaBotv3.Services
             foreach(var search in playList)
             {
                 var loadResult = await GetLavalinkNodeConnection(context).Rest.GetTracksAsync(search, searchType);
-            switch (loadResult.LoadResultType)
-            {
-                case LavalinkLoadResultType.LoadFailed:
-                    return new PlayResult() { Result = CommandExecutedResult.Failure, Message = "Lavalink loading track failure." }; ;
-                case LavalinkLoadResultType.NoMatches:
-                    return new PlayResult() { Result = CommandExecutedResult.Failure, Message = "Track search returned no matches." }; ;
-                default:
-                    //all other results are successes
-                    break;
-            }
+                switch (loadResult.LoadResultType)
+                {
+                    case LavalinkLoadResultType.LoadFailed:
+                        return new PlayResult() { Result = CommandExecutedResult.Failure, Message = "Lavalink loading track failure." }; ;
+                    case LavalinkLoadResultType.NoMatches:
+                        return new PlayResult() { Result = CommandExecutedResult.Failure, Message = "Track search returned no matches." }; ;
+                    default:
+                        //all other results are successes
+                        break;
+                }
                 tracks.Add(loadResult.Tracks.First());
             }
             User user = new User()
@@ -279,52 +279,52 @@ namespace SocuciusErgallaBotv3.Services
             };
             foreach (var track in tracks)
             {
-            if (NowPlayingTrack == null)
-            {
-                TimeSpan start = startTime != TimeSpan.Zero ? startTime : TimeSpan.Zero;
-                TimeSpan end = endTime != TimeSpan.Zero ? (endTime > track.Length ? track.Length : endTime) : track.Length;
+                if (NowPlayingTrack == null)
+                {
+                    TimeSpan start = startTime != TimeSpan.Zero ? startTime : TimeSpan.Zero;
+                    TimeSpan end = endTime != TimeSpan.Zero ? (endTime > track.Length ? track.Length : endTime) : track.Length;
 
-                await VoiceChannelConnection.PlayPartialAsync(track, start, end);
-                IsPlaying = true;
-                NowPlayingTrack = new QueuedTrack()
-                {
-                    Track = track,
-                    StartTime = startTime,
+                    await VoiceChannelConnection.PlayPartialAsync(track, start, end);
+                    IsPlaying = true;
+                    NowPlayingTrack = new QueuedTrack()
+                    {
+                        Track = track,
+                        StartTime = startTime,
                         EndTime = endTime,
                         User = user
-                };
-            }
-            else
-            {
-                QueuedTrack trackToQueue = new()
-                {
-                    Track = track,
-                    StartTime = startTime,
-                        EndTime = endTime,
-                        User = user
-                };
-                if (next)
-                {
-                    TrackQueue.Insert(0, trackToQueue);
+                    };
                 }
                 else
                 {
-                    TrackQueue.Add(trackToQueue);
+                    QueuedTrack trackToQueue = new()
+                    {
+                        Track = track,
+                        StartTime = startTime,
+                        EndTime = endTime,
+                        User = user
+                    };
+                    if (next)
+                    {
+                        TrackQueue.Insert(0, trackToQueue);
+                    }
+                    else
+                    {
+                        TrackQueue.Add(trackToQueue);
+                    }
                 }
-            }
             }
             var firstTrack = tracks.First();
             string trackAction = NowPlayingTrack.Track == tracks.First() ? "Track playing" : "Track queued";
             string timeString = startTime != TimeSpan.Zero || endTime != TimeSpan.Zero ? $" from {startTime:g}-{endTime:g}" : string.Empty;
-
+            
             if (NowPlayingTrack.Track == firstTrack && tracks.Count == 1) 
             {
                 trackAction = "Track playing";
             }
             else if (tracks.Count == 1)
-                {
+            {
                 trackAction = "Track queued";
-                }
+            }
             else if(NowPlayingTrack.Track == firstTrack && tracks.Count > 1)
             {
                 trackAction = $"Track playing and {tracks.Count - 1} remaining tracks queued";
@@ -612,7 +612,7 @@ namespace SocuciusErgallaBotv3.Services
                 {
                     randomIndex = _random.Next(tracks.Count);
                 } while (generatedIndices.Contains(randomIndex));
-                
+
                 generatedIndices.Add(randomIndex);
                 await PlayOrQueueSong(tracks[randomIndex]);
             }

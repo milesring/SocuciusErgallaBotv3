@@ -57,5 +57,9 @@ namespace SocuciusErgallaBotv3.Services
         public string Password { get; private set; }
         [JsonProperty("guildid")]
         public ulong GuildId { get; private set; }
+        [JsonProperty("googleapikey")]
+        public string ApiKey { get; private set; }
+        [JsonProperty("googleapplicationname")]
+        public string ApplicationName { get;private set; }
     }
 }

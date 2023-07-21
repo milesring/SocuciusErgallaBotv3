@@ -4,6 +4,7 @@ using DSharpPlus.SlashCommands;
 using Microsoft.Extensions.Logging;
 using SocuciusErgallaBotv3.Services;
 using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace SocuciusErgallaBotv3.Module
@@ -103,7 +104,7 @@ namespace SocuciusErgallaBotv3.Module
             if (result.Result != CommandExecutedResult.Failure)
             {
                 responseEmbed.AddField($"Duration:", $"{result.Duration}");
-        }
+            }
             await context.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(responseEmbed));
         }
 
@@ -355,8 +356,8 @@ namespace SocuciusErgallaBotv3.Module
                         ));
         }
 
-        [SlashCommand("Queue", "Displays queue of current tracks.")]
-        public async Task QueueCommand(InteractionContext context)
+        [SlashCommand("Queue", "Displays up to 10 tracks of current queue.")]
+        public async Task QueueCommand(InteractionContext context, [Option("Start", "Start for queue display")] long startIndex = 0)
         {
             _logger.LogInformation($"{context.User} used /{_textInfo.ToTitleCase(context.QualifiedName)}.");
             await context.CreateResponseAsync(DSharpPlus.InteractionResponseType.DeferredChannelMessageWithSource, new DiscordInteractionResponseBuilder()
@@ -377,20 +378,38 @@ namespace SocuciusErgallaBotv3.Module
                 "Nothing." :
                 $"{_musicService.NowPlayingTrack.Track.Title} - {_musicService.NowPlayingTrack.Track.Author}\n{_musicService.VoiceChannelConnection.CurrentState.PlaybackPosition:g}/{(_musicService.NowPlayingTrack.EndTime != TimeSpan.Zero ? _musicService.NowPlayingTrack.EndTime : _musicService.NowPlayingTrack.Track.Length):g}");
 
-            var queueCount = _musicService.TrackQueue.Count;
-            string queueString = queueCount == 0 ? "Empty." : string.Empty;
-            for (int i = 0; i < queueCount; i++)
-            {
-                var track = _musicService.TrackQueue[i];
-                queueString += $"{i + 1}: {track.Track.Title} - {track.Track.Author}\n{track.Track.Length}";
-                if (i + 1 < queueCount)
-                {
-                    queueString += "\n";
-                }
-            }
+            string queueString = GetQueueString(startIndex);
             embedBuilder.AddField("Queue:", queueString);
 
             await context.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(embedBuilder));
+        }
+
+        private string GetQueueString(long startIndex)
+        {
+            StringBuilder queueSB = new StringBuilder();
+            var queueCount = _musicService.TrackQueue.Count <= 10 ? _musicService.TrackQueue.Count : 10;
+            queueSB.Append(queueCount == 0 ? "Empty." : string.Empty);
+            int start = (int)startIndex - 1 >= 0 ? (int)startIndex - 1 : 0;
+            int end = start + 10 > _musicService.TrackQueue.Count - 1 ? _musicService.TrackQueue.Count - 1 : start + 10;
+            if(start != 0)
+            {
+                var startingTrack = _musicService.TrackQueue.First();
+                queueSB.AppendLine($"1: {startingTrack.Track.Title} - {startingTrack.Track.Author}\n{startingTrack.Track.Length}");
+                queueSB.AppendLine(".\n.");
+            }
+            // end + 1 accounts for 0 based index of queue to 1 based index for display
+            for (int i = start; i < end+1; i++)
+            {
+                var track = _musicService.TrackQueue[i];
+                queueSB.AppendLine($"{i + 1}: {track.Track.Title} - {track.Track.Author}\n{track.Track.Length}");
+            }
+            if (end != _musicService.TrackQueue.Count - 1)
+            {
+                var endingTrack = _musicService.TrackQueue.Last();
+                queueSB.AppendLine(".\n.");
+                queueSB.AppendLine($"{_musicService.TrackQueue.Count - 1}: {endingTrack.Track.Title} - {endingTrack.Track.Author}\n{endingTrack.Track.Length}");
+            }
+            return queueSB.ToString();
         }
 
         [SlashCommand("Seek", "Seeks to specified timespan in playing track.")]
@@ -440,41 +459,32 @@ namespace SocuciusErgallaBotv3.Module
             embedBuilder.AddField("Repeat:", $"{_musicService.RepeatModeProperty}.", inline: true);
             embedBuilder.AddField("Shuffle:", $"{_musicService.ShuffleModeProperty}.", inline: true);
 
-            var queueCount = _musicService.TrackQueue.Count;
-            string queueString = queueCount == 0 ? "Empty." : string.Empty;
-            for (int i = 0; i < queueCount; i++)
-            {
-                var track = _musicService.TrackQueue[i];
-                queueString += $"{i + 1}: {track.Track.Title} - {track.Track.Author}\n{track.Track.Length}";
-                if (i + 1 < queueCount)
-                {
-                    queueString += "\n";
-                }
-            }
+            string queueString = GetQueueString(0);
             embedBuilder.AddField("Queue:", queueString);
             var trackHistories = await _databaseService.GetTrackHistoriesAsync();
-            var topTracks = trackHistories.OrderByDescending(x=>x.Plays).Take(5).ToList();
-            if(topTracks != null && topTracks.Count() > 0)
+            var topTracks = trackHistories.OrderByDescending(x => x.Plays).Take(5).ToList();
+            if (topTracks != null && topTracks.Count() > 0)
             {
                 string topTrackString = string.Empty;
-                for(int i=0; i<topTracks.Count; i++) {
+                for (int i = 0; i < topTracks.Count; i++)
+                {
                     topTrackString += $"{i + 1}: ({topTracks[i].Plays}) {topTracks[i].Title}-{topTracks[i].Author}";
-                    if(i + 1 < topTracks.Count)
+                    if (i + 1 < topTracks.Count)
                     {
                         topTrackString += "\n";
                     }
                 }
-                embedBuilder.AddField($"Top Tracks (Plays) (Total {trackHistories.Sum(x=>x.Plays)}):", topTrackString);
+                embedBuilder.AddField($"Top Tracks (Plays) (Total {trackHistories.Sum(x => x.Plays)}):", topTrackString);
             }
 
             var users = await _databaseService.GetTopUserAsync();
-            if(users != null && users.Count() > 0)
+            if (users != null && users.Count() > 0)
             {
                 string topUsersString = string.Empty;
-                for(int i=0; i<users.Count;i++)
+                for (int i = 0; i < users.Count; i++)
                 {
                     topUsersString += $"{i + 1}: ({users[i].Item2}) {users[i].Item1.Username}";
-                    if(i+1 < users.Count)
+                    if (i + 1 < users.Count)
                     {
                         topUsersString += "\n";
                     }

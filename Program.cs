@@ -32,6 +32,7 @@ namespace SocuciusErgallaBotv3
             services.AddSingleton<ActivityService>();
             services.AddSingleton<MusicService>();
             services.AddSingleton<MusicTimerService>();
+            services.AddSingleton<YoutubePlayListService>();
             services.AddSingleton<Bot>();
 
             var serviceProvider = services.BuildServiceProvider();

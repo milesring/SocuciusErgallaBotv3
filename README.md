@@ -27,6 +27,15 @@ SocuciusErgallaBotv3 is a Discord music bot based on the character Socucius Erga
 ## Setup
 
 On first run, the bot will create a folder named "Resources" in its working directory. This folder will contain config.json with all of the required Lavalink and Discord configuration options. This includes Lavalink server details and Discord API token. The bot will also create a database within the "Resources" folder to store previously played music.  Once the configuration is set up, run the bot again to start the music playback functionality.
+The config.json properties are as follows:
+- `token`: Discord bot token.
+- `historydatabase`: Connection string for the history database (e.g., "Data source=Resources/history.db").
+- `hostname`: Hostname for Lavalink connection.
+- `port`: Port for Lavalink connection.
+- `password`: Password for Lavalink connection.
+- `guildid`: Specific GuildId for bot connection.
+- `googlepapikey`: Required for playlist loading using YouTube Data API v3.
+- `googleapplicationname`: Required application name for playlist loading using YouTube Data API v3.
 
 ## Slash Commands
 
