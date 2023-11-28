@@ -107,7 +107,31 @@ namespace SocuciusErgallaBotv3.Module
             }
             await context.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(responseEmbed));
         }
+        [SlashCommand("PlayVoiceLine","Play random voiceline.")]
+        public async Task PlayVoiceLine(InteractionContext context)
+        {
+            _logger.LogInformation($"{context.User} used /{_textInfo.ToTitleCase(context.QualifiedName)}.");
+            await context.CreateResponseAsync(DSharpPlus.InteractionResponseType.DeferredChannelMessageWithSource, new DiscordInteractionResponseBuilder()
+            {
+                IsEphemeral = true
+            });
 
+            var result = await _musicService.PlayVoiceLine(context);
+            var responseEmbed = new DiscordEmbedBuilder()
+                        .WithTitle($"{result.Title}")
+                        .WithAuthor($"{result.Author}")
+                        .WithDescription($"{result.Message}")
+                        .WithThumbnail($"{result.ThumbnailURL}")
+                        .WithFooter($"{_quoteService.GetRandomQuote()}")
+                        .WithUrl($"{result.URL}")
+                        .WithColor(DiscordColor.Green);
+
+            if (result.Result != CommandExecutedResult.Failure)
+            {
+                responseEmbed.AddField($"Duration:", $"{result.Duration}");
+            }
+            await context.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(responseEmbed));
+        }
         [SlashCommand("Pause", "Pause currently playing song.")]
         public async Task PauseCommand(InteractionContext context)
         {

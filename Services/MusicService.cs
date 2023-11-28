@@ -12,6 +12,7 @@ namespace SocuciusErgallaBotv3.Services
         private readonly ILogger<MusicService> _logger;
         private readonly ActivityService _activityService;
         private readonly YoutubePlayListService _youtubePlayListService;
+        private readonly VoiceLineService _voiceLineService;
         private readonly Random _random;
         public const int DefaultVolume = 15;
         public bool InChannel { get; set; } = false;
@@ -22,12 +23,13 @@ namespace SocuciusErgallaBotv3.Services
         public RepeatMode RepeatModeProperty { get; set; } = RepeatMode.None;
         public ShuffleMode ShuffleModeProperty { get; set; } = ShuffleMode.None;
 
-        public MusicService(DatabaseService databaseService, ILogger<MusicService> logger, ActivityService activityService, YoutubePlayListService youtubePlayListService)
+        public MusicService(DatabaseService databaseService, ILogger<MusicService> logger, ActivityService activityService, YoutubePlayListService youtubePlayListService, VoiceLineService voiceLineService)
         {
             _databaseService = databaseService;
             _logger = logger;
             _activityService = activityService;
             _youtubePlayListService = youtubePlayListService;
+            _voiceLineService = voiceLineService;
             _random = new();
         }
 
@@ -97,7 +99,30 @@ namespace SocuciusErgallaBotv3.Services
                     default:
                         break;
                 }
-
+                //TODO: play random voice line here
+                //if (!NowPlayingTrack.Track.Uri.IsFile && NowPlayingTrack.User != null)
+                if (!File.Exists(NowPlayingTrack.Track.Uri.ToString()) && NowPlayingTrack.User != null)
+                {
+                    var voiceLine = _voiceLineService.GetRandomVoiceline();
+                    var loadResult = await sender.Node.Rest.GetTracksAsync(voiceLine, LavalinkSearchType.Plain);
+                    switch (loadResult.LoadResultType)
+                    {
+                        case LavalinkLoadResultType.LoadFailed:
+                            return;
+                        case LavalinkLoadResultType.NoMatches:
+                            return;
+                        default:
+                            //all other results are successes
+                            break;
+                    }
+                    var track = loadResult.Tracks.First();
+                    NowPlayingTrack = new QueuedTrack()
+                    {
+                        Track = track
+                    };
+                    await VoiceChannelConnection.PlayAsync(track);
+                    return;
+                }
                 //remove next track
                 var removedTrack = TrackQueue.First();
                 TrackQueue.Remove(removedTrack);
@@ -112,17 +137,59 @@ namespace SocuciusErgallaBotv3.Services
                     await sender.PlayAsync(removedTrack.Track);
                     _logger.LogInformation($"Track playing from queue: {removedTrack.Track.Title} - {removedTrack.Track.Author}");
                 }
-                await SaveTrackInformationToDatabase(NowPlayingTrack);
+
+                //TODO: This gets called oin voicelines sometimes
+                if (NowPlayingTrack.User != null)
+                {
+                    await SaveTrackInformationToDatabase(NowPlayingTrack);
+                }
                 IsPlaying = true;
             }
             //queue is empty, but shuffle is set to endless mode
             else if (args.Reason == DSharpPlus.Lavalink.EventArgs.TrackEndReason.Finished && TrackQueue.Count == 0 && ShuffleModeProperty == ShuffleMode.Endless)
             {
+                //play random voice line
+                if (!NowPlayingTrack.Track.Uri.IsFile && NowPlayingTrack.User != null)
+                {
+                    var voiceLine = _voiceLineService.GetRandomVoiceline();
+                    var loadResult = await sender.Node.Rest.GetTracksAsync(voiceLine, LavalinkSearchType.Plain);
+                    switch (loadResult.LoadResultType)
+                    {
+                        case LavalinkLoadResultType.LoadFailed:
+                            return;
+                        case LavalinkLoadResultType.NoMatches:
+                            return;
+                        default:
+                            //all other results are successes
+                            break;
+                    }
+                    var track = loadResult.Tracks.First();
+                    NowPlayingTrack = new QueuedTrack()
+                    {
+                        Track = track
+                    };
+
+                    var averageSongLengthSeconds = 252;
+                    TimeSpan averageSongLengthSpan = TimeSpan.FromSeconds(averageSongLengthSeconds);
+                    if (track.Length > averageSongLengthSpan)
+                    {
+                        //random start time between 0:00.00 and track.length - averageSongLength and endtime = startTime + averageSongLengthSeconds
+                        var startTimeSeconds = _random.Next(0, track.Length.Seconds - averageSongLengthSeconds);
+                        NowPlayingTrack.StartTime = TimeSpan.FromSeconds(startTimeSeconds);
+                        NowPlayingTrack.EndTime = TimeSpan.FromSeconds(startTimeSeconds + averageSongLengthSeconds);
+                        await VoiceChannelConnection.PlayPartialAsync(track, NowPlayingTrack.StartTime, NowPlayingTrack.EndTime);
+                    }
+                    else
+                    {
+                        await VoiceChannelConnection.PlayAsync(track);
+                    }
+                    return;
+                }
                 NowPlayingTrack = null;
                 IsPlaying = false;
                 _logger.LogDebug($"Track queue empty, but shuffle mode is endless. Shuffling in new tracks.");
                 await QueueRandomTracks();
-                if (NowPlayingTrack != null)
+                if (NowPlayingTrack != null && NowPlayingTrack.User != null)
                 {
                     await SaveTrackInformationToDatabase(NowPlayingTrack);
                 }
@@ -151,6 +218,21 @@ namespace SocuciusErgallaBotv3.Services
         }
         private async Task Node_PlaybackStarted(LavalinkGuildConnection sender, DSharpPlus.Lavalink.EventArgs.TrackStartEventArgs args)
         {
+            _logger.LogInformation($"Playback starting for URI {NowPlayingTrack.Track.Uri}");
+            //if(Environment.OSVersion.Platform == PlatformID.Unix)
+            //{
+            //    File.Exists
+            //}
+            //if(NowPlayingTrack.Track.Uri.IsFile && NowPlayingTrack.User == null)
+            //{
+            //    //playing voice line
+            //    return;
+            //}
+            if (System.IO.File.Exists(NowPlayingTrack.Track.Uri.ToString()) && NowPlayingTrack.User == null)
+            {
+                //playing voice line
+                return;
+            }
             await _activityService.UpdateActivity($"{NowPlayingTrack.Track.Title}-{NowPlayingTrack.Track.Author}", ActivityType.ListeningTo);
         }
 
@@ -257,7 +339,7 @@ namespace SocuciusErgallaBotv3.Services
                 searchType = LavalinkSearchType.Plain;
             }
             List<LavalinkTrack> tracks = new();
-            foreach(var search in playList)
+            foreach (var search in playList)
             {
                 var loadResult = await GetLavalinkNodeConnection(context).Rest.GetTracksAsync(search, searchType);
                 switch (loadResult.LoadResultType)
@@ -316,8 +398,8 @@ namespace SocuciusErgallaBotv3.Services
             var firstTrack = tracks.First();
             string trackAction = NowPlayingTrack.Track == tracks.First() ? "Track playing" : "Track queued";
             string timeString = startTime != TimeSpan.Zero || endTime != TimeSpan.Zero ? $" from {startTime:g}-{endTime:g}" : string.Empty;
-            
-            if (NowPlayingTrack.Track == firstTrack && tracks.Count == 1) 
+
+            if (NowPlayingTrack.Track == firstTrack && tracks.Count == 1)
             {
                 trackAction = "Track playing";
             }
@@ -325,11 +407,11 @@ namespace SocuciusErgallaBotv3.Services
             {
                 trackAction = "Track queued";
             }
-            else if(NowPlayingTrack.Track == firstTrack && tracks.Count > 1)
+            else if (NowPlayingTrack.Track == firstTrack && tracks.Count > 1)
             {
                 trackAction = $"Track playing and {tracks.Count - 1} remaining tracks queued";
             }
-            else if(tracks.Count > 1)
+            else if (tracks.Count > 1)
             {
                 trackAction = $"Playlist of {tracks.Count} tracks queued";
             }
@@ -375,32 +457,87 @@ namespace SocuciusErgallaBotv3.Services
                 Username = VoiceChannelConnection.Guild.CurrentMember.Username,
                 DiscordId = VoiceChannelConnection.Guild.CurrentMember.Id.ToString()
             };
+
+            QueuedTrack newTrack = new()
+            {
+                Track = track,
+            };
+            var averageSongLengthSeconds = 252;
+            TimeSpan averageSongLengthSpan = TimeSpan.FromSeconds(averageSongLengthSeconds);
+            TimeSpan mostLikelyAnAlbumLength = TimeSpan.FromMinutes(30);
+            if (newTrack.Track.Length > mostLikelyAnAlbumLength)
+            {
+                //random start time between 0:00.00 and track.length - averageSongLength and endtime = startTime + averageSongLengthSeconds
+                var startTimeSeconds = _random.Next(0, NowPlayingTrack.Track.Length.Seconds - averageSongLengthSeconds);
+                newTrack.StartTime = TimeSpan.FromSeconds(startTimeSeconds);
+                newTrack.EndTime = TimeSpan.FromSeconds(startTimeSeconds + averageSongLengthSeconds);
+            }
+
+
             if (NowPlayingTrack == null || NowPlayingTrack.Track == null)
             {
-                await VoiceChannelConnection.PlayAsync(track);
-                NowPlayingTrack = new QueuedTrack()
+                if(newTrack.StartTime == TimeSpan.Zero && newTrack.EndTime == TimeSpan.Zero)
                 {
-                    Track = track,
-                    StartTime = TimeSpan.Zero,
-                    EndTime = TimeSpan.Zero,
-                    User = user
-                };
+                    await VoiceChannelConnection.PlayAsync(newTrack.Track);
+                }
+                else
+                {
+                    await VoiceChannelConnection.PlayPartialAsync(newTrack.Track, newTrack.StartTime, newTrack.EndTime);
+                }
+                
+                NowPlayingTrack = newTrack;
                 IsPlaying = true;
             }
             else
             {
-                //queue
-                QueuedTrack trackToQueue = new()
-                {
-                    Track = track,
-                    StartTime = TimeSpan.Zero,
-                    EndTime = TimeSpan.Zero,
-                    User = user
-                };
-                TrackQueue.Add(trackToQueue);
+                TrackQueue.Add(newTrack);
             }
             string trackAction = NowPlayingTrack.Track == track ? "Track playing" : "Track queued";
             _logger.LogInformation($"{trackAction}: {track.Title} - {track.Author}");
+        }
+
+        public async Task<PlayResult> PlayVoiceLine(InteractionContext context)
+        {
+            if (!InChannel)
+            {
+                var result = await JoinChannel(context);
+                if (result.Result == CommandExecutedResult.Failure)
+                {
+                    return result;
+                }
+            }
+            var voiceLine = _voiceLineService.GetRandomVoiceline();
+            var loadResult = await GetLavalinkNodeConnection(context).Rest.GetTracksAsync(voiceLine, LavalinkSearchType.Plain);
+            switch (loadResult.LoadResultType)
+            {
+                case LavalinkLoadResultType.LoadFailed:
+                    return new PlayResult() { Result = CommandExecutedResult.Failure, Message = "Lavalink loading track failure." }; ;
+                case LavalinkLoadResultType.NoMatches:
+                    return new PlayResult() { Result = CommandExecutedResult.Failure, Message = "Track search returned no matches." }; ;
+                default:
+                    //all other results are successes
+                    break;
+            }
+            var track = loadResult.Tracks.First();
+            await VoiceChannelConnection.PlayAsync(track);
+            IsPlaying = true;
+            NowPlayingTrack = new QueuedTrack()
+            {
+                Track = track,
+                StartTime = TimeSpan.Zero,
+                EndTime = TimeSpan.Zero,
+                User = null
+            };
+            return new PlayResult()
+            {
+                Result = CommandExecutedResult.Success,
+                Message = $"Playing voiceline.",
+                Title = track.Title,
+                Author = track.Author,
+                URL = track.Uri.IsFile ? string.Empty : track.Uri.ToString(),
+                Duration = track.Length,
+                ThumbnailURL = $"https://static.wikia.nocookie.net/elderscrolls/images/4/44/TESIII_Socucius_Ergalla.png"
+            };
         }
 
         public async Task<CommandResult> Stop(InteractionContext context)
@@ -512,10 +649,25 @@ namespace SocuciusErgallaBotv3.Services
                 await QueueRandomTracks();
                 var newTrack = TrackQueue.First();
                 TrackQueue.Remove(newTrack);
-                await VoiceChannelConnection.PlayAsync(newTrack.Track);
+                
                 _logger.LogDebug($"Skipped track, but queue was empty. Shuffled in new songs.");
                 _logger.LogDebug($"Skipped to track {newTrack.Track.Title} - {newTrack.Track.Author}");
                 NowPlayingTrack = newTrack;
+                var averageSongLengthSeconds = 252;
+                TimeSpan averageSongLengthSpan = TimeSpan.FromSeconds(averageSongLengthSeconds);
+                TimeSpan mostLikelyAnAlbumLength = TimeSpan.FromMinutes(30);
+                if (NowPlayingTrack.Track.Length > mostLikelyAnAlbumLength)
+                {
+                    //random start time between 0:00.00 and track.length - averageSongLength and endtime = startTime + averageSongLengthSeconds
+                    var startTimeSeconds = _random.Next(0, NowPlayingTrack.Track.Length.Seconds - averageSongLengthSeconds);
+                    NowPlayingTrack.StartTime = TimeSpan.FromSeconds(startTimeSeconds);
+                    NowPlayingTrack.EndTime = TimeSpan.FromSeconds(startTimeSeconds + averageSongLengthSeconds);
+                    await VoiceChannelConnection.PlayPartialAsync(NowPlayingTrack.Track, NowPlayingTrack.StartTime, NowPlayingTrack.EndTime);
+                }
+                else
+                {
+                    await VoiceChannelConnection.PlayAsync(NowPlayingTrack.Track);
+                }
                 IsPlaying = true;
                 return new PlayResult()
                 {
